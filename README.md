@@ -21,6 +21,7 @@ A web-based platform for conducting **Class Representative (CR) elections** at *
 - [About](#-about)
 - [Features](#-features)
 - [Tech Stack](#️-tech-stack)
+- [Database Schema](#️-database-schema)
 - [Project Structure](#-project-structure)
 - [Setup & Installation](#️-setup--installation)
 - [Usage Flow](#-usage-flow)
@@ -68,6 +69,107 @@ This project was built as a college submission to digitize the CR (Class Represe
 | Database   | MySQL / MariaDB                |
 | Frontend   | HTML5, CSS3, vanilla JavaScript |
 | Server     | Apache (via XAMPP)              |
+
+---
+
+## 🗄️ Database Schema
+
+The database (`online-voting`) consists of **9 tables**. Full structure is in [`database.sql`](./database.sql) (schema only — no personal data).
+
+### `users`
+Core student accounts and voting state.
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `int` PK, auto-increment | |
+| `name`, `email`, `phone` | `varchar` | `phone` is `NOT NULL` |
+| `password` | `varchar(255)` | bcrypt hash via `password_hash()` |
+| `verified` | `int` | 0/1 — set by admin after manual review |
+| `needs_reverify` | `tinyint(1)` | flags an account for re-verification |
+| `voted`, `vote`, `pending_vote`, `voted_for` | `int` | CR-voting state for this user |
+| `is_cr`, `cr_section`, `cr_course` | | set once a user becomes a CR |
+| `is_candidate` | `tinyint` | 0/1 — standing as a CR candidate |
+| `course`, `section` | `varchar` | |
+| `reset_token`, `reset_expires` | | forgot-password flow |
+
+### `user_details`
+Extended profile submitted in `verify-form.php`, one row per user.
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `int` PK | |
+| `user_id` | `int` | **UNIQUE** — one profile per user |
+| `full_name`, `age`, `gender` | | |
+| `roll_no`, `erp_id` | `varchar` | |
+| `user_photo` | `varchar(255)` | selfie filename in `uploads/` |
+| `college_id_photo`, `college_id_back` | `varchar(255)` | ID card photos |
+| `course`, `section` | | |
+
+### `candidates`
+Students standing for **CR (Class Representative)** elections.
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `int` PK | |
+| `user_id` | `int` | references `users.id` |
+| `name`, `course`, `section` | | |
+| `votes`, `pending_votes` | `int` | vote tally |
+
+### `events`
+Fest/competition events (e.g. Dance, Singing) — separate from CR elections.
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `int` PK | |
+| `name`, `fest_name` | `varchar` | `fest_name` defaults to `'Ullaash'` |
+| `time_limit` | `int` | minutes, default `10` |
+| `start_time`, `end_time` | `datetime` | |
+| `status` | `varchar(20)` | default `'pending'` |
+| `winner_id` | `int` | |
+
+### `event_candidates`
+Candidates contesting a specific `event`.
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `int` PK | |
+| `event_id` | `int` FK → `events.id` | |
+| `name`, `votes` | | |
+
+### `event_votes`
+One row per vote cast in an event.
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `int` PK | |
+| `user_id` | `int` FK → `users.id` | |
+| `event_id` | `int` FK → `events.id` | |
+| `candidate_id` | `int` | references `event_candidates.id` |
+| `voted_at` | `timestamp` | |
+
+### `ir_candidates` / `ir_votes`
+Candidates and votes for an **IR (Independent Representative)** election — a separate, weighted voting track alongside CR voting.
+| Table | Key columns |
+|---|---|
+| `ir_candidates` | `user_id`, `name`, `votes`, `weightage_votes` (`decimal`) |
+| `ir_votes` | `voter_id` (**UNIQUE** — one IR vote per user), `candidate_id`, `weightage` (default `5.00`) |
+
+### `voting_settings`
+Key-value config table controlling election state.
+| Column | Type | Notes |
+|---|---|---|
+| `setting_name` | `varchar(100)` | **UNIQUE**, e.g. `cr_voting_status`, `ir_voting_end_time` |
+| `setting_value` | `text` | |
+
+### Entity Relationships
+
+```mermaid
+erDiagram
+    users ||--o| user_details : "has profile"
+    users ||--o{ candidates : "may become"
+    users ||--o{ ir_candidates : "may become"
+    users ||--o{ event_votes : "casts"
+    events ||--o{ event_candidates : "has"
+    events ||--o{ event_votes : "receives"
+    event_candidates ||--o{ event_votes : "receives"
+    ir_candidates ||--o{ ir_votes : "receives"
+```
+
+> ⚠️ **Privacy note:** if you export your own live database for backups, **never commit the data-filled export** — it contains real names, emails, phone numbers, and password hashes of registered students. Only the structure-only [`database.sql`](./database.sql) in this repo is safe to share publicly.
 
 ---
 
@@ -123,12 +225,12 @@ Or place it directly at `C:\xampp\htdocs\online-voting`.
 **2. Start Apache & MySQL** from the XAMPP Control Panel.
 
 **3. Create the database.**
-Open [phpMyAdmin](http://localhost/phpmyadmin), create a database (e.g. `srmu_voting`), and import your SQL schema file.
+Open [phpMyAdmin](http://localhost/phpmyadmin), create a database named `online-voting`, and import [`database.sql`](./database.sql) from this repo (structure only — you'll start with empty tables).
 
 **4. Configure the database connection** in `db.php`:
 ```php
 <?php
-$conn = mysqli_connect("localhost", "root", "", "srmu_voting");
+$conn = mysqli_connect("localhost", "root", "", "online-voting");
 if (!$conn) {
     die("Connection failed: " . mysqli_connect_error());
 }
