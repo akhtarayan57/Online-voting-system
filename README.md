@@ -1,4 +1,4 @@
-🗳️Online Voting System
+#🗳️Online Voting System
 
 A web-based platform for conducting Class Representative (CR) elections at SRMU (Shri Ramswaroop Memorial University). Students register, complete a verified profile, and vote for candidates — while admins manage elections, verify student identities, and publish results.
 
